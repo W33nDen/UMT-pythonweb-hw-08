@@ -27,6 +27,31 @@ class ContactUpdate(BaseModel):
 
 class ContactResponse(ContactBase):
     id: int
+    user_id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserCreate(BaseModel):
+    email: EmailStr = Field(examples=["user@example.com"])
+    password: str = Field(min_length=6, examples=["secretpassword"])
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: EmailStr
+    avatar: str | None
+    is_verified: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class RequestEmail(BaseModel):
+    email: EmailStr
+
 

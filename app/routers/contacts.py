@@ -4,20 +4,25 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.database import get_db
 from app.schemas import ContactCreate, ContactResponse, ContactUpdate
-
+from app.auth import get_current_user
+from app.models import User
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
 
 
 @router.post("/", response_model=ContactResponse, status_code=status.HTTP_201_CREATED)
-def create_contact(contact: ContactCreate, db: Session = Depends(get_db)) -> ContactResponse:
-    if crud.get_contact_by_email(db, contact.email):
+def create_contact(
+    contact: ContactCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ContactResponse:
+    if crud.get_contact_by_email(db, contact.email, current_user.id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Contact with this email already exists",
+            detail="Contact with this email already exists in your contacts list",
         )
 
-    return crud.create_contact(db, contact)
+    return crud.create_contact(db, contact, current_user.id)
 
 
 @router.get("/", response_model=list[ContactResponse])
@@ -26,18 +31,32 @@ def read_contacts(
     last_name: str | None = Query(default=None, description="Search by last name"),
     email: str | None = Query(default=None, description="Search by email"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> list[ContactResponse]:
-    return crud.get_contacts(db, first_name=first_name, last_name=last_name, email=email)
+    return crud.get_contacts(
+        db,
+        user_id=current_user.id,
+        first_name=first_name,
+        last_name=last_name,
+        email=email,
+    )
 
 
 @router.get("/birthdays/upcoming", response_model=list[ContactResponse])
-def read_upcoming_birthdays(db: Session = Depends(get_db)) -> list[ContactResponse]:
-    return crud.get_upcoming_birthdays(db)
+def read_upcoming_birthdays(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[ContactResponse]:
+    return crud.get_upcoming_birthdays(db, user_id=current_user.id)
 
 
 @router.get("/{contact_id}", response_model=ContactResponse)
-def read_contact(contact_id: int, db: Session = Depends(get_db)) -> ContactResponse:
-    contact = crud.get_contact(db, contact_id)
+def read_contact(
+    contact_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ContactResponse:
+    contact = crud.get_contact(db, contact_id, current_user.id)
     if contact is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
 
@@ -49,27 +68,31 @@ def update_contact(
     contact_id: int,
     contact_update: ContactUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ContactResponse:
-    contact = crud.get_contact(db, contact_id)
+    contact = crud.get_contact(db, contact_id, current_user.id)
     if contact is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
 
     if contact_update.email and contact_update.email != contact.email:
-        existing_contact = crud.get_contact_by_email(db, contact_update.email)
+        existing_contact = crud.get_contact_by_email(db, contact_update.email, current_user.id)
         if existing_contact:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Contact with this email already exists",
+                detail="Contact with this email already exists in your contacts list",
             )
 
     return crud.update_contact(db, contact, contact_update)
 
 
 @router.delete("/{contact_id}", response_model=ContactResponse)
-def delete_contact(contact_id: int, db: Session = Depends(get_db)) -> ContactResponse:
-    contact = crud.get_contact(db, contact_id)
+def delete_contact(
+    contact_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ContactResponse:
+    contact = crud.get_contact(db, contact_id, current_user.id)
     if contact is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
 
     return crud.delete_contact(db, contact)
-
